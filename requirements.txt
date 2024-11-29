@@ -1,0 +1,30 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn==0.24.0
+python-dotenv==1.0.0
+pydantic==2.4.2
+pydantic-settings==2.0.3
+
+# Model and ML
+transformers>=4.38.1  # Updated to support Gemma model
+torch==2.1.0
+sentencepiece==0.1.99
+numpy<2.0.0  # Added to ensure compatibility
+
+# Monitoring and metrics
+prometheus-client==0.17.1
+prometheus-fastapi-instrumentator==6.1.0
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.9
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Utilities
+python-multipart==0.0.6
+python-jose==3.3.0
+passlib==1.7.4

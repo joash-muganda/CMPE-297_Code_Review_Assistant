@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Code Review Assistant Dashboard</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-gray-100">
+    <div class="min-h-screen">
+      <!-- Navigation -->
+      <nav class="bg-gray-800 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+          <h1 class="text-xl font-bold">Code Review Assistant</h1>
+          <div class="flex space-x-4">
+            <button
+              id="metricsBtn"
+              class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+            >
+              Metrics
+            </button>
+            <button
+              id="historyBtn"
+              class="px-4 py-2 bg-green-600 rounded hover:bg-green-700"
+            >
+              History
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <div class="container mx-auto p-6">
+        <!-- Code Input Section -->
+        <div class="mb-8 bg-white rounded-lg shadow-lg p-6">
+          <h2 class="text-2xl font-bold mb-4">Submit Code for Review</h2>
+          <div class="mb-4">
+            <select id="languageSelect" class="w-full p-2 border rounded">
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <textarea id="codeInput" class="w-full h-64 font-mono"></textarea>
+          </div>
+          <button
+            id="submitBtn"
+            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Submit for Review
+          </button>
+        </div>
+
+        <!-- Review Results Section -->
+        <div
+          id="reviewResults"
+          class="bg-white rounded-lg shadow-lg p-6 mb-8 hidden"
+        >
+          <h2 class="text-2xl font-bold mb-4">Review Results</h2>
+          <div id="reviewContent" class="prose max-w-none"></div>
+        </div>
+
+        <!-- Metrics Modal -->
+        <div
+          id="metricsModal"
+          class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden"
+        >
+          <div class="bg-white rounded-lg p-6 max-w-2xl mx-auto mt-20">
+            <h2 class="text-2xl font-bold mb-4">Performance Metrics</h2>
+            <div id="metricsContent" class="space-y-4"></div>
+            <button
+              class="closeModal mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <!-- History Modal -->
+        <div
+          id="historyModal"
+          class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden"
+        >
+          <div class="bg-white rounded-lg p-6 max-w-4xl mx-auto mt-20">
+            <h2 class="text-2xl font-bold mb-4">Review History</h2>
+            <div
+              id="historyContent"
+              class="space-y-4 max-h-96 overflow-y-auto"
+            ></div>
+            <button
+              class="closeModal mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
+
+    <script>
+      // Initialize CodeMirror
+      const editor = CodeMirror.fromTextArea(
+        document.getElementById("codeInput"),
+        {
+          lineNumbers: true,
+          mode: "python",
+          theme: "monokai",
+          lineWrapping: true,
+        }
+      );
+
+      // Language selector
+      document
+        .getElementById("languageSelect")
+        .addEventListener("change", (e) => {
+          editor.setOption("mode", e.target.value);
+        });
+
+      // Submit code for review
+      document
+        .getElementById("submitBtn")
+        .addEventListener("click", async () => {
+          const code = editor.getValue();
+          const language = document.getElementById("languageSelect").value;
+
+          try {
+            const response = await fetch("/api/v1/review", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                code,
+                language,
+              }),
+            });
+
+            const data = await response.json();
+
+            // Display review results
+            document.getElementById("reviewResults").classList.remove("hidden");
+            document.getElementById("reviewContent").innerHTML = marked.parse(
+              data.review
+            );
+          } catch (error) {
+            alert("Error submitting code for review: " + error.message);
+          }
+        });
+
+      // Metrics button
+      document
+        .getElementById("metricsBtn")
+        .addEventListener("click", async () => {
+          try {
+            const response = await fetch("/api/v1/metrics");
+            const data = await response.json();
+
+            const metricsHtml = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-4 bg-gray-100 rounded">
+                            <h3 class="font-bold">Total Reviews</h3>
+                            <p>${data.total_reviews}</p>
+                        </div>
+                        <div class="p-4 bg-gray-100 rounded">
+                            <h3 class="font-bold">Average Response Time</h3>
+                            <p>${data.avg_response_time.toFixed(2)}s</p>
+                        </div>
+                        <div class="p-4 bg-gray-100 rounded">
+                            <h3 class="font-bold">Token Usage</h3>
+                            <p>${data.token_usage}</p>
+                        </div>
+                    </div>
+                `;
+
+            document.getElementById("metricsContent").innerHTML = metricsHtml;
+            document.getElementById("metricsModal").classList.remove("hidden");
+          } catch (error) {
+            alert("Error fetching metrics: " + error.message);
+          }
+        });
+
+      // History button
+      document
+        .getElementById("historyBtn")
+        .addEventListener("click", async () => {
+          try {
+            const response = await fetch("/api/v1/history");
+            const data = await response.json();
+
+            const historyHtml = data.history
+              .map(
+                (entry) => `
+                    <div class="border-b pb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold">${new Date(
+                              entry.timestamp
+                            ).toLocaleString()}</span>
+                            <span class="text-sm text-gray-600">Response Time: ${entry.response_time.toFixed(
+                              2
+                            )}s</span>
+                        </div>
+                        <div class="bg-gray-100 p-2 rounded mb-2">
+                            <pre class="whitespace-pre-wrap">${
+                              entry.code_snippet
+                            }</pre>
+                        </div>
+                        <div class="prose max-w-none">
+                            ${marked.parse(entry.review)}
+                        </div>
+                    </div>
+                `
+              )
+              .join("");
+
+            document.getElementById("historyContent").innerHTML = historyHtml;
+            document.getElementById("historyModal").classList.remove("hidden");
+          } catch (error) {
+            alert("Error fetching history: " + error.message);
+          }
+        });
+
+      // Close modals
+      document.querySelectorAll(".closeModal").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.getElementById("metricsModal").classList.add("hidden");
+          document.getElementById("historyModal").classList.add("hidden");
+        });
+      });
+    </script>
+  </body>
+</html>
