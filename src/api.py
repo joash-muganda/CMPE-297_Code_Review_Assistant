@@ -1,15 +1,18 @@
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-import os
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import logging
 from datetime import datetime
+import os
+import uuid
 
 from .config import Config
 from .model_manager import ModelManager
+from .code_reviewer import CodeReviewer
 
 # Configure logging
 logging.basicConfig(
@@ -37,48 +40,78 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-static_dir = os.path.join(os.path.dirname(__file__), "static")
+# Get the current directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Mount static files directory
+static_dir = os.path.join(current_dir, "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Initialize model manager
-model_manager = ModelManager(model_name=Config.MODEL_NAME)
+# Initialize templates
+templates = Jinja2Templates(directory=static_dir)
 
-# Pydantic models for request/response
+# Initialize components
+model_manager = ModelManager(model_name=Config.MODEL_NAME)
+code_reviewer = CodeReviewer(model_manager)
+
+# Pydantic models
 class CodeReviewRequest(BaseModel):
     code: str
-    language: Optional[str] = None
-    context: Optional[str] = None
+    language: str
+    prompt_version: Optional[str] = "default"
 
 class CodeReviewResponse(BaseModel):
-    review: str
+    review_id: str
+    suggestions: List[Dict]
     metrics: Dict
     timestamp: str
 
 class MetricsResponse(BaseModel):
     total_reviews: int
     avg_response_time: float
-    token_usage: int
+    avg_suggestions: float
+    reviews_today: int
 
-@app.get("/")
-async def root():
-    """Serve the main dashboard."""
-    return FileResponse(os.path.join(static_dir, "dashboard.html"))
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the dashboard page."""
+    try:
+        return templates.TemplateResponse(
+            "dashboard.html",
+            {"request": request}
+        )
+    except Exception as e:
+        logger.error(f"Error serving dashboard: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error serving dashboard")
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "model_status": "loaded"
+    }
 
 @app.post("/api/v1/review", response_model=CodeReviewResponse)
-async def review_code(request: CodeReviewRequest):
+async def review_code(request: CodeReviewRequest, background_tasks: BackgroundTasks):
     """Submit code for review."""
     try:
-        result = await model_manager.review_code(request.code, request.language)
+        review_id = str(uuid.uuid4())
+        review = code_reviewer.review_code(
+            code=request.code,
+            language=request.language,
+            review_id=review_id
+        )
+        
+        # Add background task to update metrics
+        background_tasks.add_task(update_metrics, review)
+        
         return CodeReviewResponse(
-            review=result["review"],
-            metrics=result["metrics"],
-            timestamp=datetime.now().isoformat()
+            review_id=review.review_id,
+            suggestions=review.suggestions,
+            metrics=review.metrics,
+            timestamp=review.timestamp.isoformat()
         )
     except Exception as e:
         logger.error(f"Error during code review: {str(e)}")
@@ -86,38 +119,38 @@ async def review_code(request: CodeReviewRequest):
 
 @app.get("/api/v1/metrics", response_model=MetricsResponse)
 async def get_metrics():
-    """Get current metrics."""
+    """Get review metrics."""
     try:
-        metrics = model_manager.get_metrics()
-        return MetricsResponse(
-            total_reviews=metrics["total_reviews"],
-            avg_response_time=metrics["avg_response_time"],
-            token_usage=metrics["token_usage"]
-        )
+        metrics = code_reviewer.get_review_metrics()
+        return MetricsResponse(**metrics)
     except Exception as e:
-        logger.error(f"Error retrieving metrics: {str(e)}")
+        logger.error(f"Error fetching metrics: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/history")
-async def get_review_history(limit: Optional[int] = None):
+async def get_history(limit: Optional[int] = None):
     """Get review history."""
     try:
-        history = model_manager.get_review_history(limit)
-        return {"history": history}
+        history = code_reviewer.get_review_history(limit)
+        return [{
+            "review_id": review.review_id,
+            "language": review.language,
+            "suggestions": review.suggestions,
+            "metrics": review.metrics,
+            "timestamp": review.timestamp.isoformat()
+        } for review in history]
     except Exception as e:
-        logger.error(f"Error retrieving review history: {str(e)}")
+        logger.error(f"Error fetching history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/export-metrics")
-async def export_metrics(background_tasks: BackgroundTasks):
-    """Export metrics to file."""
+async def update_metrics(review):
+    """Background task to update metrics."""
     try:
-        export_path = f"logs/metrics_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        background_tasks.add_task(model_manager.export_metrics, export_path)
-        return {"message": f"Metrics export scheduled to {export_path}"}
+        # Here you could implement additional metric tracking
+        # such as saving to a database or updating Prometheus metrics
+        logger.info(f"Updated metrics for review {review.review_id}")
     except Exception as e:
-        logger.error(f"Error scheduling metrics export: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error updating metrics: {str(e)}")
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
@@ -126,13 +159,4 @@ async def global_exception_handler(request, exc):
     return JSONResponse(
         status_code=500,
         content={"detail": "An unexpected error occurred. Please try again later."}
-    )
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "api:app",
-        host=Config.HOST,
-        port=Config.PORT,
-        reload=Config.DEBUG
     )

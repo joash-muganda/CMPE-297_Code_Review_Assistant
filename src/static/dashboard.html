@@ -51,6 +51,9 @@
               <option value="javascript">JavaScript</option>
               <option value="java">Java</option>
               <option value="cpp">C++</option>
+              <option value="typescript">TypeScript</option>
+              <option value="go">Go</option>
+              <option value="rust">Rust</option>
               <option value="other">Other</option>
             </select>
           </div>
@@ -71,7 +74,13 @@
           class="bg-white rounded-lg shadow-lg p-6 mb-8 hidden"
         >
           <h2 class="text-2xl font-bold mb-4">Review Results</h2>
-          <div id="reviewContent" class="prose max-w-none"></div>
+          <div id="reviewContent" class="space-y-4">
+            <div id="issues" class="bg-red-50 p-4 rounded-lg"></div>
+            <div id="improvements" class="bg-blue-50 p-4 rounded-lg"></div>
+            <div id="bestPractices" class="bg-green-50 p-4 rounded-lg"></div>
+            <div id="security" class="bg-yellow-50 p-4 rounded-lg"></div>
+          </div>
+          <div id="reviewMetrics" class="mt-4 text-sm text-gray-600"></div>
         </div>
 
         <!-- Metrics Modal -->
@@ -136,6 +145,17 @@
           editor.setOption("mode", e.target.value);
         });
 
+      // Format review section
+      function formatReviewSection(section) {
+        if (!section.items || section.items.length === 0) return "";
+        return `
+          <h3 class="font-bold mb-2">${section.type}</h3>
+          <ul class="list-disc pl-5">
+            ${section.items.map((item) => `<li>${item}</li>`).join("")}
+          </ul>
+        `;
+      }
+
       // Submit code for review
       document
         .getElementById("submitBtn")
@@ -159,9 +179,33 @@
 
             // Display review results
             document.getElementById("reviewResults").classList.remove("hidden");
-            document.getElementById("reviewContent").innerHTML = marked.parse(
-              data.review
-            );
+
+            // Format and display suggestions by type
+            const reviewContent = data.suggestions.reduce((acc, section) => {
+              const sectionHtml = formatReviewSection(section);
+              if (sectionHtml) {
+                acc[section.type.toLowerCase()] = sectionHtml;
+              }
+              return acc;
+            }, {});
+
+            // Update each section
+            document.getElementById("issues").innerHTML =
+              reviewContent.issues || "";
+            document.getElementById("improvements").innerHTML =
+              reviewContent.improvements || "";
+            document.getElementById("bestPractices").innerHTML =
+              reviewContent.bestpractices || "";
+            document.getElementById("security").innerHTML =
+              reviewContent.security || "";
+
+            // Display metrics
+            document.getElementById("reviewMetrics").innerHTML = `
+            <p>Review ID: ${data.review_id}</p>
+            <p>Response Time: ${data.metrics.response_time.toFixed(2)}s</p>
+            <p>Code Length: ${data.metrics.code_length} characters</p>
+            <p>Suggestions: ${data.metrics.suggestion_count}</p>
+          `;
           } catch (error) {
             alert("Error submitting code for review: " + error.message);
           }
@@ -176,21 +220,25 @@
             const data = await response.json();
 
             const metricsHtml = `
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="p-4 bg-gray-100 rounded">
-                            <h3 class="font-bold">Total Reviews</h3>
-                            <p>${data.total_reviews}</p>
-                        </div>
-                        <div class="p-4 bg-gray-100 rounded">
-                            <h3 class="font-bold">Average Response Time</h3>
-                            <p>${data.avg_response_time.toFixed(2)}s</p>
-                        </div>
-                        <div class="p-4 bg-gray-100 rounded">
-                            <h3 class="font-bold">Token Usage</h3>
-                            <p>${data.token_usage}</p>
-                        </div>
-                    </div>
-                `;
+            <div class="grid grid-cols-2 gap-4">
+              <div class="p-4 bg-gray-100 rounded">
+                <h3 class="font-bold">Total Reviews</h3>
+                <p>${data.total_reviews}</p>
+              </div>
+              <div class="p-4 bg-gray-100 rounded">
+                <h3 class="font-bold">Average Response Time</h3>
+                <p>${data.avg_response_time.toFixed(2)}s</p>
+              </div>
+              <div class="p-4 bg-gray-100 rounded">
+                <h3 class="font-bold">Average Suggestions</h3>
+                <p>${data.avg_suggestions.toFixed(1)}</p>
+              </div>
+              <div class="p-4 bg-gray-100 rounded">
+                <h3 class="font-bold">Reviews Today</h3>
+                <p>${data.reviews_today}</p>
+              </div>
+            </div>
+          `;
 
             document.getElementById("metricsContent").innerHTML = metricsHtml;
             document.getElementById("metricsModal").classList.remove("hidden");
@@ -207,28 +255,26 @@
             const response = await fetch("/api/v1/history");
             const data = await response.json();
 
-            const historyHtml = data.history
+            const historyHtml = data
               .map(
                 (entry) => `
-                    <div class="border-b pb-4">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="font-bold">${new Date(
-                              entry.timestamp
-                            ).toLocaleString()}</span>
-                            <span class="text-sm text-gray-600">Response Time: ${entry.response_time.toFixed(
-                              2
-                            )}s</span>
-                        </div>
-                        <div class="bg-gray-100 p-2 rounded mb-2">
-                            <pre class="whitespace-pre-wrap">${
-                              entry.code_snippet
-                            }</pre>
-                        </div>
-                        <div class="prose max-w-none">
-                            ${marked.parse(entry.review)}
-                        </div>
-                    </div>
-                `
+            <div class="border-b pb-4">
+              <div class="flex justify-between items-center mb-2">
+                <span class="font-bold">${new Date(
+                  entry.timestamp
+                ).toLocaleString()}</span>
+                <span class="text-sm text-gray-600">
+                  Language: ${entry.language} | 
+                  Response Time: ${entry.metrics.response_time.toFixed(2)}s
+                </span>
+              </div>
+              <div class="space-y-2">
+                ${entry.suggestions
+                  .map((section) => formatReviewSection(section))
+                  .join("")}
+              </div>
+            </div>
+          `
               )
               .join("");
 
