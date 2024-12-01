@@ -1,21 +1,13 @@
 services:
   app:
     build: .
-    runtime: nvidia  # Enable NVIDIA runtime
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - DEBUG=true
       - LOG_LEVEL=INFO
     deploy:
       resources:
         limits:
-          memory: 12G
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+          memory: 8G
     ports:
       - "8000:8000"  # FastAPI
       - "9090:9090"  # Metrics

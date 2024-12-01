@@ -27,13 +27,24 @@ if __name__ == "__main__":
         print(f"Database URL: {Config.DATABASE_URL}")
         
         # Start uvicorn server
-        uvicorn.run(
-            app,  # Pass the app instance directly
-            host=Config.HOST,
-            port=Config.PORT,
-            reload=Config.DEBUG,
-            log_level=Config.LOG_LEVEL.lower()
-        )
+        if Config.DEBUG:
+            # Use import string when debug/reload is enabled
+            uvicorn.run(
+                "src.api:app",  # Import string instead of app instance
+                host=Config.HOST,
+                port=Config.PORT,
+                reload=True,
+                log_level=Config.LOG_LEVEL.lower()
+            )
+        else:
+            # Use app instance directly when not in debug mode
+            uvicorn.run(
+                app,
+                host=Config.HOST,
+                port=Config.PORT,
+                reload=False,
+                log_level=Config.LOG_LEVEL.lower()
+            )
         
     except Exception as e:
         logger.error(f"Failed to start server: {str(e)}")

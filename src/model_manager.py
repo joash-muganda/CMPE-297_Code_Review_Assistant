@@ -23,16 +23,19 @@ class ModelManager:
             )
             logging.info("Tokenizer loaded successfully.")
 
+            # Log device information
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logging.info(f"Using device: {device}")
+
             # Load model with specific configuration for memory management
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,  # Required for Gemma
                 torch_dtype=torch.float32,
-                offload_folder="model_cache",  # Specify offload folder
-                offload_state_dict=True,  # Enable state dict offloading
+                low_cpu_mem_usage=True,  # Enable low memory usage
+                device_map="auto",  # Automatically handle device placement
                 token=Config.HUGGING_FACE_TOKEN
             )
-            
             logging.info("Model loaded successfully")
 
         except Exception as e:
@@ -55,13 +58,17 @@ class ModelManager:
                 trust_remote_code=True  # Required for Gemma chat template
             )
             
+            # Move inputs to same device as model
+            device = next(self.model.parameters()).device
+            inputs = inputs.to(device)
+            
             # Generate response
             with torch.no_grad():
                 outputs = self.model.generate(
                     inputs,
                     max_new_tokens=max_new_tokens,
-                    temperature=0.7,
-                    top_p=0.9,
+                    temperature=Config.TEMPERATURE,
+                    top_p=Config.TOP_P,
                     trust_remote_code=True  # Required for Gemma generation
                 )
             
