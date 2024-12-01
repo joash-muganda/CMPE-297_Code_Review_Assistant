@@ -147,7 +147,7 @@
 
       // Format review section
       function formatReviewSection(section) {
-        if (!section.items || section.items.length === 0) return "";
+        if (!section || !section.items || section.items.length === 0) return "";
         return `
           <h3 class="font-bold mb-2">${section.type}</h3>
           <ul class="list-disc pl-5">
@@ -180,32 +180,27 @@
             // Display review results
             document.getElementById("reviewResults").classList.remove("hidden");
 
-            // Format and display suggestions by type
-            const reviewContent = data.suggestions.reduce((acc, section) => {
-              const sectionHtml = formatReviewSection(section);
-              if (sectionHtml) {
-                acc[section.type.toLowerCase()] = sectionHtml;
-              }
-              return acc;
-            }, {});
-
             // Update each section
-            document.getElementById("issues").innerHTML =
-              reviewContent.issues || "";
-            document.getElementById("improvements").innerHTML =
-              reviewContent.improvements || "";
-            document.getElementById("bestPractices").innerHTML =
-              reviewContent.bestpractices || "";
-            document.getElementById("security").innerHTML =
-              reviewContent.security || "";
+            const sections = {
+              issues: "Issues",
+              improvements: "Improvements",
+              bestPractices: "Best Practices",
+              security: "Security"
+            };
+
+            // Find and display each section
+            Object.entries(sections).forEach(([id, type]) => {
+              const section = data.suggestions.find(s => s.type === type);
+              document.getElementById(id).innerHTML = formatReviewSection(section) || "";
+            });
 
             // Display metrics
             document.getElementById("reviewMetrics").innerHTML = `
-            <p>Review ID: ${data.review_id}</p>
-            <p>Response Time: ${data.metrics.response_time.toFixed(2)}s</p>
-            <p>Code Length: ${data.metrics.code_length} characters</p>
-            <p>Suggestions: ${data.metrics.suggestion_count}</p>
-          `;
+              <p>Review ID: ${data.review_id}</p>
+              <p>Response Time: ${data.metrics.response_time.toFixed(2)}s</p>
+              <p>Code Length: ${data.metrics.code_length} characters</p>
+              <p>Suggestions: ${data.metrics.suggestion_count}</p>
+            `;
           } catch (error) {
             alert("Error submitting code for review: " + error.message);
           }

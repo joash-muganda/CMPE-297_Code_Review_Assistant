@@ -23,6 +23,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Update bitsandbytes to latest version
+RUN pip install -U bitsandbytes
+
 # Copy application code
 COPY . .
 

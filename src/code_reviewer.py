@@ -22,23 +22,19 @@ class CodeReviewer:
         
     def _create_review_prompt(self, code: str, language: str) -> str:
         """Create a structured prompt for code review."""
-        return f"""As a code reviewer, analyze the following {language} code and provide specific suggestions for:
-1. Code quality improvements
-2. Potential bugs or issues
-3. Performance optimizations
-4. Security concerns
-5. Best practices and standards
+        return f"""As a code reviewer, analyze the following {language} code and provide specific suggestions in exactly these sections:
+- Issues: (list critical problems)
+- Improvements: (list suggested enhancements)
+- Best Practices: (list recommendations)
+- Security: (list security concerns)
 
 Code to review:
 ```{language}
 {code}
 ```
 
-Provide your review in the following format:
-- Issues: (list critical problems)
-- Improvements: (list suggested enhancements)
-- Best Practices: (list recommendations)
-- Security: (list security concerns)
+Provide your review in exactly these sections: Issues, Improvements, Best Practices, Security.
+Each section should contain a list of specific points.
 """
 
     def review_code(self, code: str, language: str, review_id: str) -> CodeReview:
@@ -61,15 +57,29 @@ Provide your review in the following format:
             # Parse and structure the response
             sections = self._parse_review_response(response)
             
+            # Ensure all required sections exist
+            required_sections = ['Issues', 'Improvements', 'Best Practices', 'Security']
+            sections_dict = {section['type']: section for section in sections}
+            
+            normalized_sections = []
+            for section_type in required_sections:
+                if section_type in sections_dict:
+                    normalized_sections.append(sections_dict[section_type])
+                else:
+                    normalized_sections.append({
+                        'type': section_type,
+                        'items': []
+                    })
+            
             # Store suggestions
-            review.suggestions = sections
+            review.suggestions = normalized_sections
             
             # Calculate metrics
             end_time = datetime.now()
             review.metrics = {
                 'response_time': (end_time - start_time).total_seconds(),
                 'code_length': len(code),
-                'suggestion_count': len(sections)
+                'suggestion_count': sum(len(section['items']) for section in normalized_sections)
             }
             
             # Store review in history
@@ -99,8 +109,10 @@ Provide your review in the following format:
                         'items': []
                     }
                     sections.append(current_section)
-            elif current_section and line:
-                current_section['items'].append(line)
+            elif current_section and line.strip('-* '):  # Handle various list markers
+                item = line.strip('-* ')
+                if item:  # Only add non-empty items
+                    current_section['items'].append(item)
                 
         return sections
 
@@ -113,7 +125,12 @@ Provide your review in the following format:
     def get_review_metrics(self) -> Dict:
         """Calculate aggregate metrics from review history."""
         if not self.review_history:
-            return {}
+            return {
+                'total_reviews': 0,
+                'avg_response_time': 0.0,
+                'avg_suggestions': 0.0,
+                'reviews_today': 0
+            }
             
         total_reviews = len(self.review_history)
         avg_response_time = sum(r.metrics['response_time'] for r in self.review_history) / total_reviews

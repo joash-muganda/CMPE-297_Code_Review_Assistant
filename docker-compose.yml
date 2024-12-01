@@ -4,6 +4,9 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/code_review
+      - HOST=0.0.0.0
+      - PORT=8000
     deploy:
       resources:
         limits:
@@ -14,12 +17,34 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env
-      - ./src/static:/app/src/static
-      - ~/.cache/huggingface:/root/.cache/huggingface  # Cache HF models
+      - ./src:/app/src
     env_file:
       - .env
     networks:
       - code-review-network
+    depends_on:
+      db:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=code_review
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - code-review-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   prometheus:
     image: prom/prometheus:latest
@@ -35,12 +60,11 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
     networks:
       - code-review-network
-    depends_on:
-      - app
 
 networks:
   code-review-network:
     driver: bridge
 
 volumes:
+  postgres_data:
   prometheus_data:

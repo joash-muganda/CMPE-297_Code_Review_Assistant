@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -45,7 +45,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Mount static files directory
 static_dir = os.path.join(current_dir, "static")
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/static", StaticFiles(directory=static_dir, html=True), name="static")
 
 # Initialize templates
 templates = Jinja2Templates(directory=static_dir)
@@ -76,10 +76,7 @@ class MetricsResponse(BaseModel):
 async def root(request: Request):
     """Serve the dashboard page."""
     try:
-        return templates.TemplateResponse(
-            "dashboard.html",
-            {"request": request}
-        )
+        return FileResponse(os.path.join(static_dir, "dashboard.html"))
     except Exception as e:
         logger.error(f"Error serving dashboard: {str(e)}")
         raise HTTPException(status_code=500, detail="Error serving dashboard")
