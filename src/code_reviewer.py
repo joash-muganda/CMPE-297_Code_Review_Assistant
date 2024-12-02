@@ -57,29 +57,15 @@ Each section should contain a list of specific points.
             # Parse and structure the response
             sections = self._parse_review_response(response)
             
-            # Ensure all required sections exist
-            required_sections = ['Issues', 'Improvements', 'Best Practices', 'Security']
-            sections_dict = {section['type']: section for section in sections}
-            
-            normalized_sections = []
-            for section_type in required_sections:
-                if section_type in sections_dict:
-                    normalized_sections.append(sections_dict[section_type])
-                else:
-                    normalized_sections.append({
-                        'type': section_type,
-                        'items': []
-                    })
-            
             # Store suggestions
-            review.suggestions = normalized_sections
+            review.suggestions = sections
             
             # Calculate metrics
             end_time = datetime.now()
             review.metrics = {
                 'response_time': (end_time - start_time).total_seconds(),
                 'code_length': len(code),
-                'suggestion_count': sum(len(section['items']) for section in normalized_sections)
+                'suggestion_count': sum(len(section['items']) for section in sections)
             }
             
             # Store review in history
@@ -96,25 +82,45 @@ Each section should contain a list of specific points.
         sections = []
         current_section = None
         
-        for line in response.split('\n'):
+        # Split response into lines and process each line
+        lines = response.split('\n')
+        for line in lines:
             line = line.strip()
             if not line:
                 continue
-                
-            if line.startswith('- '):
-                if ':' in line:
-                    section_type, content = line[2:].split(':', 1)
-                    current_section = {
-                        'type': section_type.strip(),
-                        'items': []
-                    }
-                    sections.append(current_section)
-            elif current_section and line.strip('-* '):  # Handle various list markers
+            
+            # Check for section headers
+            if line.startswith('- ') and ':' in line:
+                section_type = line[2:].split(':', 1)[0].strip()
+                current_section = {
+                    'type': section_type,
+                    'items': []
+                }
+                sections.append(current_section)
+                # Add any content after the colon as first item
+                content = line.split(':', 1)[1].strip()
+                if content:
+                    current_section['items'].append(content)
+            # Add items to current section
+            elif current_section and line.strip('-* '):
                 item = line.strip('-* ')
                 if item:  # Only add non-empty items
                     current_section['items'].append(item)
-                
-        return sections
+        
+        # Ensure all required sections exist
+        required_sections = ['Issues', 'Improvements', 'Best Practices', 'Security']
+        result = []
+        for section_type in required_sections:
+            found_section = next((s for s in sections if s['type'] == section_type), None)
+            if found_section:
+                result.append(found_section)
+            else:
+                result.append({
+                    'type': section_type,
+                    'items': []
+                })
+        
+        return result
 
     def _add_to_history(self, review: CodeReview):
         """Add review to history and maintain size limit."""
