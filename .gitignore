@@ -22,8 +22,9 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
+env/
+.env
 
 # IDE
 .idea/
@@ -33,22 +34,29 @@ ENV/
 
 # Logs and databases
 *.log
+*.sqlite
 logs/
-*.db
-*.sqlite3
+review_history.json
 
-# Environment variables
-.env
+# Hugging Face cache
+.cache/
+.huggingface/
 
 # Model files
+*.bin
 *.pt
 *.pth
-*.bin
-*.onnx
+*.ckpt
+*.model
 
-# Docker
-.docker/
+# Secrets
+.env
+.env.*
+*.key
+secrets.yaml
+secrets.yml
+secrets.json
 
-# System
+# OS
 .DS_Store
 Thumbs.db
