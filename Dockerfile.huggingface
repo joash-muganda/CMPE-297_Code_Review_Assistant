@@ -1,0 +1,49 @@
+# Use Python base image
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/logs /app/src/static /home/user/.cache/huggingface /home/user/.local \
+    && chmod -R 777 /app/logs /home/user/.cache/huggingface /home/user/.local
+
+# Create non-root user
+RUN useradd -m -u 1000 user \
+    && chown -R user:user /app /home/user/.cache /home/user/.local
+
+# Switch to non-root user
+USER user
+
+# Upgrade pip and install numpy first
+RUN pip install --user --no-cache-dir --upgrade pip
+RUN pip install --user --no-cache-dir "numpy<2.0.0"
+
+# Copy requirements first to leverage Docker cache
+COPY --chown=user:user requirements.txt .
+
+# Install Python dependencies
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY --chown=user:user . .
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=7860
+ENV PATH="/home/user/.local/bin:${PATH}"
+ENV HF_HOME=/home/user/.cache/huggingface
+
+# Expose port for Hugging Face Spaces
+EXPOSE 7860
+
+# Run the application
+CMD ["python", "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "7860"]
